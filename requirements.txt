@@ -1,0 +1,6 @@
+torch
+torchvision
+numpy
+pandas
+h5py
+git+https://github.com/kitamoto-lab/pyphoon2/
