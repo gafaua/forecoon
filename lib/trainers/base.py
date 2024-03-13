@@ -17,16 +17,17 @@ class BaseTrainer:
 
         self.batch_size = args.batch_size
         self.lr = args.lr
-        self.weight_decay = args.weight_decay
+        #self.weight_decay = args.weight_decay
         self.num_epochs = args.num_epochs
+        self.num_workers = args.num_workers
 
         self.use_wandb = args.use_wandb
         self.log_interval = args.log_interval
 
-        self.save_dir = f"{args.save_dir}/{args.run_name}"
+        self.save_dir = f"{args.save_dir}/{args.experiment}/{args.run_name}"
         makedirs(self.save_dir, exist_ok=True)
 
-        self.opt = torch.optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        self.opt = torch.optim.AdamW(self.model.parameters(), lr=self.lr)
         self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.opt, T_max=self.num_epochs)
 
         if args.checkpoint is not None:
@@ -37,6 +38,7 @@ class BaseTrainer:
             self.step = 0
             self.epoch = 0
 
+        print(f"Trainer ready, model with {sum(p.numel() for p in self.model_params):,} parameters")
 
     def train(self):
         train_epochs = range(self.epoch, self.num_epochs)
@@ -45,6 +47,7 @@ class BaseTrainer:
             self._save_checkpoint()
             self._run_val_epoch()
             self.epoch += 1
+            print(f"LR: {self.lr_scheduler.get_last_lr()[0]:.5f}")
 
 
     @abstractmethod
