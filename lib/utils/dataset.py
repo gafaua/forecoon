@@ -1,3 +1,4 @@
+from tracemalloc import start
 import numpy as np
 from torch import Tensor
 import torch
@@ -127,11 +128,12 @@ NORMALIZATION = dict(
 class SequenceTyphoonDataset(DigitalTyphoonDataset):
     def __init__(self,
                  labels,
-                 include_images,
                  x,
                  y,
                  num_inputs,
                  num_preds,
+                 interval=1,
+                 output_all=False,
                  preprocessed_path=None,
                  image_dir: str="/fs9/gaspar/data/WP/image/",
                  metadata_dir: str="/fs9/gaspar/data/WP/metadata/",
@@ -168,18 +170,20 @@ class SequenceTyphoonDataset(DigitalTyphoonDataset):
 
         self.num_inputs = num_inputs
         self.num_preds = num_preds
+        self.interval = interval
+        self.output_all = output_all
 
-        if not include_images:
-            if preprocessed_path is not None:
-                print("WARNING: preprocess cannot be used when images are discarded")
-            preprocessed_path = None
+        self.slice_inputs = lambda start_idx: slice(start_idx, start_idx+(self.num_inputs*self.interval),self.interval)
+        self.slice_outputs = lambda start_idx: slice(start_idx+(self.num_inputs*self.interval),start_idx+((self.num_inputs+self.num_preds)*self.interval), self.interval)
 
-        self.include_images = include_images
+        if preprocessed_path is None:
+            print("WARNING: no images used")
+
         self.preprocessed_path = preprocessed_path
 
         # Post process sequences filter out too short sequences
         for seq in self.sequences:
-            if seq.get_num_images() < self.num_inputs + self.num_preds+1:
+            if seq.get_num_images() < (self.num_inputs + self.num_preds)*self.interval+1:
                 self.number_of_images -= seq.get_num_images()
                 seq.images.clear()
                 self.number_of_nonempty_sequences -= 1
@@ -187,26 +191,38 @@ class SequenceTyphoonDataset(DigitalTyphoonDataset):
         self.number_of_nonempty_sequences += 1
 
 
-    def __getitem__(self, idx, output_all=True):
+    def __getitem__(self, idx):
         seq = self.get_ith_sequence(idx)
-        start_idx = np.random.randint(0, seq.get_num_images()-self.num_inputs-self.num_preds)
+        start_idx = np.random.randint(0, seq.get_num_images()-(self.num_inputs + self.num_preds)*self.interval)
         images = seq.get_all_images_in_sequence()
 
         labels = torch.stack([self._labels_from_label_strs(image, self.labels) for image in images])
 
-        if self.include_images:
+        if self.output_all:
+            if self.preprocessed_path is not None:
+                npz = np.load(f"{self.preprocessed_path}/{seq.sequence_str}.npz")
+                names_to_features = dict(zip(npz["arr_1"], npz["arr_0"]))
+                features = [names_to_features[str(img.image_filepath).split("/")[-1].split(".")[0]] 
+                            for img in images]
+                features = torch.from_numpy(np.array(features))
+
+                return torch.cat((labels, features), dim=1)
+            else:
+                return labels
+
+        lab_inputs = labels[self.slice_inputs(start_idx), self.x]
+        lab_preds = labels[self.slice_outputs(start_idx), self.y]
+
+        if self.preprocessed_path is not None:
             # TODO handle preprocessed images
             npz = np.load(f"{self.preprocessed_path}/{seq.sequence_str}.npz")
             names_to_features = dict(zip(npz["arr_1"], npz["arr_0"]))
-            features = [names_to_features[str(images[i].image_filepath).split("/")[-1].split(".")[0]] for i in range(start_idx,start_idx+self.num_inputs)]
-            features = np.array(features)
-            # TODO add these features to the input data
+            features = [names_to_features[str(img.image_filepath).split("/")[-1].split(".")[0]] 
+                        for img in images[self.slice_inputs(start_idx)]]
+            features = torch.from_numpy(np.array(features))
 
-        if output_all:
-            return labels
+            lab_inputs = torch.cat((lab_inputs, features), dim=1)
 
-        lab_inputs = labels[start_idx:start_idx+self.num_inputs, self.x]
-        lab_preds = labels[start_idx+self.num_inputs:start_idx+self.num_inputs+self.num_preds, self.y]
 
         return lab_inputs, lab_preds
 

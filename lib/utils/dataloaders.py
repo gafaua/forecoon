@@ -181,12 +181,13 @@ def get_TS_dataloader(args):
     #     return trans(img.astype(np.float32)), label
 
     #TODO make these arguments
-    dataset = STD(labels=["month", "day", "hour", "pressure", "wind", "grade"],
-                include_images=False,
-                x=[0,1,2,3,4],
-                y=[3,4],
-                num_inputs=12,
-                num_preds=1,
+    dataset = STD(labels=args.labels,#["month", "day", "hour", "pressure", "wind"],
+                preprocessed_path=args.preprocessed_path,
+                x=args.labels_input,#[0,1,2,3,4],
+                y=args.labels_output,#[3,4],
+                num_inputs=args.num_inputs,
+                num_preds=args.num_outputs,
+                interval=args.interval,
                 filter_func= lambda x: x.grade() < 6,
                 )
 

@@ -11,7 +11,7 @@ def main():
 
     model = get_resnet18()
 
-    preprocess_images_sequences(model, "test_preprop", transform_func)
+    preprocess_images_sequences(model, "resnet18_imagenet", transform_func)
 
 if __name__ == "__main__":
     main()

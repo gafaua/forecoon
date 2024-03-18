@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 import wandb
-from lib.models.lstm_predictor import LSTM
+from lib.models.lstm_predictor import LSTM, AttentionLSTM
 
 from lib.trainers.base import BaseTrainer
 import torch.nn as nn
@@ -12,10 +12,10 @@ import torch.nn as nn
 class TimeSeriesTrainer(BaseTrainer):
     def __init__(self, train_loader, val_loader, args) -> None:
         self.model = LSTM(
-            69,
+            69+512,
             hidden_size=args.hidden_dim,
-            num_layers=2,
-            output_size=2
+            num_layers=args.num_layers,
+            output_size=len(args.labels_output)
         ).to(args.device)
 
         super().__init__(train_loader, val_loader, args)
@@ -29,7 +29,6 @@ class TimeSeriesTrainer(BaseTrainer):
             )
         
         self.reg_criterion = nn.MSELoss()
-        self.cls_criterion = nn.CrossEntropyLoss()
         self.num_reg = 2
 
 
@@ -48,9 +47,8 @@ class TimeSeriesTrainer(BaseTrainer):
             preds = self.model(inp).unsqueeze(1)
 
             loss_reg = self.reg_criterion(preds[:,:,:self.num_reg], outs[:,:,:self.num_reg])
-            #loss_cls = self.cls_criterion(preds[:,:,self.num_reg:].squeeze(), torch.argmax(outs[:,:,self.num_reg:], dim=2).squeeze())
 
-            loss = loss_reg #+ loss_cls
+            loss = loss_reg
 
             loss.backward()
             self.opt.step()
@@ -58,7 +56,7 @@ class TimeSeriesTrainer(BaseTrainer):
             self.step += 1
             losses["loss"].append(loss.item())
             losses["reg"].append(loss_reg.item())
-            #losses["cls"].append(loss_cls.item())
+
             avg = {f"tr_{key}": np.mean(val) for key, val in losses.items()}
             pbar.set_postfix(dict(loss=loss.item(), **avg))
 
@@ -66,12 +64,6 @@ class TimeSeriesTrainer(BaseTrainer):
                 wandb.log(data=avg, step=self.step)
 
         self.lr_scheduler.step()
-
-       # accuracy = get_balance_accuracy_score(all_preds, all_labels)
-        # if self.use_wandb:
-        #     wandb.log(data=dict(train_acc=accuracy))
-        #print(f"Train Balanced Accuracy: {accuracy:.3f}")
-        #print_confusion_matrix(all_preds, all_labels)
 
     def _run_val_epoch(self):
         self.model.eval()
@@ -83,16 +75,15 @@ class TimeSeriesTrainer(BaseTrainer):
         with torch.no_grad():
             for i, batch in enumerate(pbar):
                 inp, outs = batch[0].to(self.device), batch[1].to(self.device)
-                #print(torch.mean(images[0]).item())
+
                 preds = self.model(inp).unsqueeze(1)
                 loss_reg = self.reg_criterion(preds[:,:,:self.num_reg], outs[:,:,:self.num_reg])
-                #loss_cls = self.cls_criterion(preds[:,:,self.num_reg:].squeeze(), torch.argmax(outs[:,:,self.num_reg:], dim=2).squeeze())
 
-                loss = loss_reg #+ loss_cls
+                loss = loss_reg
 
                 losses["loss"].append(loss.item())
                 losses["reg"].append(loss_reg.item())
-                #losses["cls"].append(loss_cls.item())
+
                 avg = {f"ev_{key}": np.mean(val) for key, val in losses.items()}
                 pbar.set_postfix(dict(loss=loss.item(), **avg))
 

@@ -12,7 +12,7 @@ class TemporalPredictor(nn.Module):
         super().__init__()
         self.backbone = get_feature_extractor(backbone)
         self.prediction = nn.Sequential(
-            nn.Linear(dim*2, hidden_dim),
+            nn.Linear(dim, hidden_dim),
             nn.ReLU(),
             #nn.BatchNorm1d(hidden_dim),
             nn.Linear(hidden_dim, hidden_dim),
@@ -22,6 +22,6 @@ class TemporalPredictor(nn.Module):
 
     def forward(self, img1, img2):
         z1 = self.backbone(img1)
-        z2 = self.backbone(img2).detach()
-        preds = self.prediction(torch.cat((z1,z2), dim=1))
+        z2 = self.backbone(img2)#.detach()
+        preds = self.prediction(z2-z1)
         return preds

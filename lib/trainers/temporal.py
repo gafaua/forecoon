@@ -28,7 +28,7 @@ class TemporalTrainer(BaseTrainer):
                 name=args.run_name,
                 config=args.__dict__,
             )
-        
+
         self.criterion = nn.MSELoss()
 
 
@@ -36,9 +36,6 @@ class TemporalTrainer(BaseTrainer):
         self.model.train()
         pbar = tqdm(self.train_loader, desc=f"Training {self.epoch+1}/{self.num_epochs}")
         losses = dict(loss=deque(maxlen=self.log_interval))
-
-        all_preds = []
-        all_labels = []
 
         for i, sequence in enumerate(pbar):
 
@@ -62,28 +59,16 @@ class TemporalTrainer(BaseTrainer):
                 running_avg = np.mean(losses["loss"])
                 pbar.set_postfix(dict(loss=loss.item(), avg=running_avg))
 
-                all_preds.append(torch.round(preds).cpu().detach().numpy())
-                all_labels.append(preds.cpu().detach().numpy())
-
                 if self.use_wandb and self.step % self.log_interval == 0:
                     wandb.log(data={"train_loss": running_avg}, step=self.step)
 
         self.lr_scheduler.step()
 
-        all_preds = np.concatenate(all_preds)
-        all_labels = np.concatenate(all_labels)
-       # accuracy = get_balance_accuracy_score(all_preds, all_labels)
-        # if self.use_wandb:
-        #     wandb.log(data=dict(train_acc=accuracy))
-        #print(f"Train Balanced Accuracy: {accuracy:.3f}")
-        #print_confusion_matrix(all_preds, all_labels)
 
     def _run_val_epoch(self):
         self.model.eval()
         pbar = tqdm(self.val_loader, desc=f"Eval {self.epoch+1}/{self.num_epochs}")
         losses = dict(loss=list())
-        all_preds = []
-        all_labels = []
 
         with torch.no_grad():
             for i, sequence in enumerate(pbar):
@@ -102,15 +87,6 @@ class TemporalTrainer(BaseTrainer):
                     running_avg = np.mean(losses["loss"])
                     pbar.set_postfix(dict(loss=loss.item(), avg=running_avg))
 
-                    all_preds.append(torch.round(preds).cpu().numpy())
-                    all_labels.append(preds.cpu().numpy())
-
-        all_preds = np.concatenate(all_preds)
-        all_labels = np.concatenate(all_labels)
-        #accuracy = get_balance_accuracy_score(all_preds, all_labels)
-
         if self.use_wandb:
             wandb.log(data={"val_loss": np.mean(losses["loss"])}, step=self.step)
 
-        #print(f"Eval Balanced Accuracy: {accuracy:.3f}")
-        #print_confusion_matrix(all_preds, all_labels)

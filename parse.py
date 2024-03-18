@@ -1,17 +1,29 @@
 # TODO add argument parser
 
 from argparse import ArgumentParser
+import configparser
 from time import time
 
 
 def parse_args():
     parser = ArgumentParser()
 
+    parser.add_argument("-c", "--config_file", type=str)
     parser.add_argument("--experiment", type=str)
 
     parser.add_argument("--backbone", type=str)
     parser.add_argument("--dim", type=int)
     parser.add_argument("--hidden_dim", type=int)
+    parser.add_argument("--num_layers", type=int)
+    parser.add_argument("--preprocessed_path", type=str, default=None)
+
+    # LSTM Time series
+    parser.add_argument('--labels', nargs='*', default=[])
+    parser.add_argument('--labels_input', nargs='*', default=[])
+    parser.add_argument('--labels_output', nargs='*', default=[])
+    parser.add_argument("--num_inputs", type=int, default=12)
+    parser.add_argument("--num_outputs", type=int, default=1)
+    parser.add_argument("--interval", type=int, default=3)
 
     # Training parameters
     parser.add_argument("--lr", type=float, default=1e-4)
@@ -26,12 +38,26 @@ def parse_args():
     parser.add_argument("--use_wandb", action="store_true", default=False)
     parser.add_argument("--log_interval", type=int, default=10)
 
-    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--run_name", type=str, default=str(time()))
     parser.add_argument("--checkpoint", type=str, default=None)
 
     args = parser.parse_args()
 
-    # Post treatment on arguments
+    if args.config_file:
+        config = configparser.ConfigParser()
+        config.read(args.config_file)
+        defaults = {}
+        sections = ["Typhoon"]
+        for s in sections:
+            if config.has_section(s):
+                defaults.update(dict(config.items(s)))
+        parser.set_defaults(**defaults)
+        args = parser.parse_args() # Overwrite arguments
+
+    # Post processing on arguments
+    args.labels = args.labels.split(",")
+    args.labels_input = [int(x) for x in args.labels_input.split(",")]
+    args.labels_output = [int(x) for x in args.labels_output.split(",")]
 
     return args

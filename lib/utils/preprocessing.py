@@ -4,31 +4,47 @@ import torch
 from tqdm import tqdm
 import numpy as np
 from lib.models.feature_extractors import get_resnet18
-import torchvision.transforms as T
+from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
+
 
 from lib.utils.dataloaders import IMAGE_DIR, METADATA_DIR, METADAT_JSON
-from lib.utils.fisheye import FishEye
 
+class SimpleSeqDataset(Dataset):
+    def __init__(self) -> None:
+        super().__init__()
+        self.dataset = DigitalTyphoonDataset(
+                image_dir=IMAGE_DIR,
+                metadata_dir=METADATA_DIR,
+                metadata_json=METADAT_JSON,
+                get_images_by_sequence=True,
+                labels=[],
+                filter_func= None,
+                ignore_list=[],
+                transform=None,
+                verbose=False
+            )
+
+    def __getitem__(self, index):
+        return self.dataset.get_ith_sequence(index)
+    
+    def __len__(self):
+        return len(self.dataset)
 
 def preprocess_images_sequences(model, out_dir, transform):
     makedirs(out_dir, exist_ok=True)
-    dataset = DigitalTyphoonDataset(
-        image_dir=IMAGE_DIR,
-        metadata_dir=METADATA_DIR,
-        metadata_json=METADAT_JSON,
-        get_images_by_sequence=True,
-        labels=[],
-        filter_func= None,
-        ignore_list=[],
-        transform=None,
-        verbose=False
-    )
+    dataset = SimpleSeqDataset()
+    loader = DataLoader(dataset,
+                        batch_size=1,
+                        num_workers=16,
+                        shuffle=False,
+                        collate_fn=lambda x: x)
 
     model.eval()
     model = model.to("cuda")
     with torch.no_grad():
-        for idx in tqdm(range(len(dataset))):
-            seq = dataset.get_ith_sequence(idx)
+        for seq in tqdm(loader):
+            seq = seq[0]
             images = seq.get_all_images_in_sequence()
             names = np.array([str(image.image_filepath).split("/")[-1].split(".")[0] for image in images])
 
