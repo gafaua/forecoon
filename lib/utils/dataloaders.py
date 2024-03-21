@@ -1,10 +1,12 @@
 from datetime import datetime
 from pyphoon2.DigitalTyphoonDataset import DigitalTyphoonDataset
+import torch
 
 from lib.utils.dataset import SequenceTyphoonDataset as STD
 from lib.utils.dataset import DatasetFromSubset, NestedDigitalTyphoonDataset
 from torch.utils.data import DataLoader
 import torchvision.transforms as T
+import torch.nn as nn
 import numpy as np
 
 from lib.utils.fisheye import FishEye
@@ -188,6 +190,7 @@ def get_TS_dataloader(args):
                 num_inputs=args.num_inputs,
                 num_preds=args.num_outputs,
                 interval=args.interval,
+                use_date=args.use_date,
                 filter_func= lambda x: x.grade() < 6,
                 )
 
@@ -212,12 +215,86 @@ def get_TS_dataloader(args):
 
     return train_loader, val_loader, test_loader
 
+class TwoCropsTransform:
+    """Take two random crops of one image as the query and key."""
+
+    def __init__(self, base_transform, device):
+        self.base_transform = base_transform
+        self.device = device
+
+    def __call__(self, x):
+        q = self.base_transform(x)
+        k = self.base_transform(x)
+        return [q, k]
+
+def get_moco_dataloader(args):
+    dataset = DigitalTyphoonDataset(
+        image_dir=IMAGE_DIR,
+        metadata_dir=METADATA_DIR,
+        metadata_json=METADAT_JSON,
+        #get_images_by_sequence=True,
+        labels=[],
+        split_dataset_by="sequence",
+        filter_func= lambda x: x.grade() < 6,
+        ignore_list=[],
+        transform=None,
+        verbose=False
+    )
+
+    train_transforms = TwoCropsTransform(nn.Sequential(
+        #T.Resize(256),
+        T.CenterCrop(384),
+        T.RandomResizedCrop((224,224), (0.5,1)),
+        T.RandomApply([T.GaussianBlur(3, [.1, 3.])], p=0.5),
+        T.RandomSolarize(threshold=0.5,p=0.5),
+        #T.RandAugment(),
+        T.RandomHorizontalFlip(p=0.5),
+        T.RandomVerticalFlip(p=0.5),
+        #T.Normalize(mean=269.15, std=24.14),
+    ).to("cuda"), device="cuda")
+
+    def transform_func(obj, trans):
+        img_range = [150, 350]
+        img, labels = obj
+        img = img.clip(img_range[0], img_range[1])
+        img = (img - img_range[0])/(img_range[1]-img_range[0])
+        img = img.astype(np.float32)
+        img = torch.from_numpy(img).to("cuda").unsqueeze(0)
+
+        return trans(img)
+
+    train, val, test = dataset.random_split([0.7, 0.15, 0.15], split_by="sequence")
+    train = DatasetFromSubset(train, lambda x: transform_func(x, trans=train_transforms))
+    val   = DatasetFromSubset(val, lambda x: transform_func(x, trans=train_transforms))
+    test  = DatasetFromSubset(test, lambda x: transform_func(x, trans=train_transforms))
+
+    print(f"\n{len(train)} train images")
+    print(f"{len(val)} val images")
+    print(f"{len(test)} test images")
+
+    train_loader = DataLoader(train,
+                              batch_size=args.batch_size,
+                              shuffle=True,
+                              num_workers=args.num_workers,
+                              drop_last=True)
+    val_loader = DataLoader(val,
+                            batch_size=args.batch_size,
+                            shuffle=False,
+                            num_workers=args.num_workers,
+                            drop_last=True)
+    test_loader = DataLoader(test,
+                            batch_size=args.batch_size,
+                            shuffle=False,
+                            num_workers=args.num_workers)
+
+    return train_loader, val_loader, test_loader
 
 
 experiments = dict(
     simple=get_simple_dataloader,
     temporal=get_temporal_sequence_dataloader,
     ts=get_TS_dataloader,
+    moco=get_moco_dataloader,
 )
 
 

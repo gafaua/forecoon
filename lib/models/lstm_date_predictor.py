@@ -33,11 +33,24 @@ class LSTMDate(nn.Module):
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
 
-        self.fc_q = nn.Linear(query_size, hidden_size)
+        self.fc_q = nn.Sequential(
+            nn.Linear(query_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size)
+        )
+
+        self.fc = nn.Sequential(
+            nn.Linear(hidden_size*2, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size)
+        )
+
+        #self.attention = Attention()
 
     def forward(self, x, q):
         out, _ = self.lstm(x)
         q_enc = self.fc_q(q)
+        #context_vector, _ = self.attention(out, q_enc)
 
-        out = self.fc(out[:, -1, :])
+        out = self.fc(torch.cat((q_enc, out[:,-1,:]), dim=1))
         return out

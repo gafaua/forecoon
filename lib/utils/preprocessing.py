@@ -33,6 +33,7 @@ class SimpleSeqDataset(Dataset):
 
 def preprocess_images_sequences(model, out_dir, transform):
     makedirs(out_dir, exist_ok=True)
+    print(f"Writing feature files to {out_dir}")
     dataset = SimpleSeqDataset()
     loader = DataLoader(dataset,
                         batch_size=1,

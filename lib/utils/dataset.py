@@ -133,6 +133,7 @@ class SequenceTyphoonDataset(DigitalTyphoonDataset):
                  num_inputs,
                  num_preds,
                  interval=1,
+                 use_date=False,
                  output_all=False,
                  preprocessed_path=None,
                  image_dir: str="/fs9/gaspar/data/WP/image/",
@@ -159,6 +160,7 @@ class SequenceTyphoonDataset(DigitalTyphoonDataset):
         idx = 0
         self.x = []
         self.y = []
+        self.use_date = use_date
 
         for i, label in enumerate(labels):
             sz = LABEL_SIZE[label] if label in LABEL_SIZE else 1
@@ -174,7 +176,14 @@ class SequenceTyphoonDataset(DigitalTyphoonDataset):
         self.output_all = output_all
 
         self.slice_inputs = lambda start_idx: slice(start_idx, start_idx+(self.num_inputs*self.interval),self.interval)
-        self.slice_outputs = lambda start_idx: slice(start_idx+(self.num_inputs*self.interval),start_idx+((self.num_inputs+self.num_preds)*self.interval), self.interval)
+
+        if self.use_date:
+            def slice_outputs(start_idx):
+                random_shift = np.random.randint(1,24)
+                return start_idx+(self.num_inputs*self.interval) + random_shift
+            self.slice_outputs = slice_outputs
+        else:
+            self.slice_outputs = lambda start_idx: slice(start_idx+(self.num_inputs*self.interval),start_idx+((self.num_inputs+self.num_preds)*self.interval), self.interval)
 
         if preprocessed_path is None:
             print("WARNING: no images used")
@@ -211,7 +220,10 @@ class SequenceTyphoonDataset(DigitalTyphoonDataset):
                 return labels
 
         lab_inputs = labels[self.slice_inputs(start_idx), self.x]
-        lab_preds = labels[self.slice_outputs(start_idx), self.y]
+        if self.use_date:
+            lab_preds = labels[min(self.slice_outputs(start_idx), len(labels)-1), self.y]
+        else:
+            lab_preds = labels[self.slice_outputs(start_idx), self.y]
 
         if self.preprocessed_path is not None:
             # TODO handle preprocessed images

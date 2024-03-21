@@ -14,16 +14,18 @@ def parse_args():
     parser.add_argument("--backbone", type=str)
     parser.add_argument("--dim", type=int)
     parser.add_argument("--hidden_dim", type=int)
+    parser.add_argument("--out_dim", type=int)
     parser.add_argument("--num_layers", type=int)
     parser.add_argument("--preprocessed_path", type=str, default=None)
 
     # LSTM Time series
-    parser.add_argument('--labels', nargs='*', default=[])
-    parser.add_argument('--labels_input', nargs='*', default=[])
-    parser.add_argument('--labels_output', nargs='*', default=[])
+    parser.add_argument('--labels', default="")
+    parser.add_argument('--labels_input', default="")
+    parser.add_argument('--labels_output', default="")
     parser.add_argument("--num_inputs", type=int, default=12)
     parser.add_argument("--num_outputs", type=int, default=1)
     parser.add_argument("--interval", type=int, default=3)
+    parser.add_argument("--use_date", type=bool, default=False)
 
     # Training parameters
     parser.add_argument("--lr", type=float, default=1e-4)
@@ -42,6 +44,10 @@ def parse_args():
     parser.add_argument("--run_name", type=str, default=str(time()))
     parser.add_argument("--checkpoint", type=str, default=None)
 
+    # MoCo
+    parser.add_argument("--queue_size", type=float, default=65536)
+    parser.add_argument("--temperature", type=float, default=0.07)
+
     args = parser.parse_args()
 
     if args.config_file:
@@ -57,7 +63,7 @@ def parse_args():
 
     # Post processing on arguments
     args.labels = args.labels.split(",")
-    args.labels_input = [int(x) for x in args.labels_input.split(",")]
-    args.labels_output = [int(x) for x in args.labels_output.split(",")]
+    args.labels_input = [int(x) for x in args.labels_input.split(",")] if len(args.labels_input) > 0 else ""
+    args.labels_output = [int(x) for x in args.labels_output.split(",")] if len(args.labels_output) > 0 else ""
 
     return args
